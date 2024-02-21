@@ -111,6 +111,16 @@ void setup(){
 }
 
 void loop(){
+  if (send_servo.servo_status == 0) {
+    esp_err_t result = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct)); //mode 1 reset
+    if (result == ESP_OK) {
+      Serial.println("sending_data - success\n - lock the door");
+    }
+    else {
+      Serial.println("Error sending the data");
+    } 
+    delay(1000);
+  }
   //lock
   if (ultrasonic.stateUltra == 1 && send_servo.servo_status == 0) {
     for (i=0; i<=90; i++) {
@@ -119,14 +129,6 @@ void loop(){
     }
     Serial.println("lock the door");
     send_servo.servo_status = 1;
-    esp_err_t result = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct)); //mode 1 reset
-    if (result == ESP_OK) {
-      Serial.println("sending_data - success\n - lock the door");
-    }
-    else {
-      Serial.println("Error sending the data");
-    }
-      
   }
   //unlock
   else if (ultrasonic.stateUltra == 0 && send_servo.servo_status == 1) {
