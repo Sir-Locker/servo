@@ -1,5 +1,6 @@
 #include <ESP32Servo.h>
 #include <esp_now.h>
+#include <string>
 #ifdef ESP32
   #include <WiFi.h>
 #else
@@ -14,6 +15,7 @@ int i = 0;
 uint8_t MacAddressKeyPad[] = {0x3C, 0x61, 0x05, 0x03, 0xCA, 0x04};
 uint8_t MacAddressUltrasonic[] = {0xE8, 0xDB, 0x84, 0x00, 0xFB, 0x3C};
 uint8_t MacAddressScanner[] = {0xE8, 0xDB, 0x84, 0x01, 0x07, 0x90};
+uint8_t MacAddressLed[] = {0xE8, 0x68, 0xE7, 0x23, 0x82, 0x1C};
 
 typedef struct servo_struct{
   int servo_status;//1 = lock, 0 = unlock
@@ -33,6 +35,8 @@ ultrasonic_send ultrasonic;
 esp_now_peer_info_t peerInfoUltrasonic; //ultrasonic
 esp_now_peer_info_t peerInfoKeyPad;
 esp_now_peer_info_t peerInfoScanner;
+esp_now_peer_info_t peerInfoLed;
+
 
 bool compareMac(const uint8_t * a, uint8_t * b){
   for(int i=0;i<6;i++){
@@ -102,25 +106,33 @@ void setup(){
     Serial.println("Scanner: Failed to add peer");
     return;
   }
+  //peer led
+  memcpy(peerInfoLed.peer_addr, MacAddressLed, 6);
+  peerInfoLed.channel = 0;  
+  peerInfoLed.encrypt = false;
+  if (esp_now_add_peer(&peerInfoLed) != ESP_OK){
+    Serial.println("led: Failed to add peer");
+    return;
+  }
   
   servo1.attach(SERVO1_PIN);
   send_servo.servo_status = 1;
   servo1.write(0); 
-  
+
   Serial.print(" - start - \n");
 }
 
 void loop(){
   if (send_servo.servo_status == 0) {
-    esp_err_t result = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct)); //mode 1 reset
-    if (result == ESP_OK) {
-      Serial.println("sending_data - success\n - lock the door");
+    esp_err_t result1 = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct));
+    if (result1 == ESP_OK) {
+      Serial.println("sending_data - success\n - unlock the door");
     }
     else {
       Serial.println("Error sending the data");
     } 
     delay(1000);
-  }
+  } 
   //lock
   if (ultrasonic.stateUltra == 1 && send_servo.servo_status == 0) {
     for (i=0; i<=90; i++) {
@@ -129,6 +141,22 @@ void loop(){
     }
     Serial.println("lock the door");
     send_servo.servo_status = 1;
+    esp_err_t result1 = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct));
+    if (result1 == ESP_OK) {
+      Serial.println("sending_data - keypad - success");
+    }
+    else {
+      Serial.println("Error sending the data");
+    } 
+    delay(1000);
+    esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
+    if (result2 == ESP_OK) {
+      Serial.println("sending_data - led - success");
+    }
+    else {
+      Serial.println("Error sending the data");
+    } 
+    delay(1000);
   }
   //unlock
   else if (ultrasonic.stateUltra == 0 && send_servo.servo_status == 1) {
@@ -138,5 +166,13 @@ void loop(){
     }
     Serial.print(" - unlock the door\n");
     send_servo.servo_status = 0;
+    esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
+    if (result2 == ESP_OK) {
+      Serial.println("sending_data - led - success");
+    }
+    else {
+      Serial.println("Error sending the data");
+    } 
+    delay(1000);
   }
 }
