@@ -1,3 +1,4 @@
+
 #include <ESP32Servo.h>
 #include <esp_now.h>
 #include <string>
@@ -14,8 +15,16 @@ int i = 0;
 
 uint8_t MacAddressKeyPad[] = {0x3C, 0x61, 0x05, 0x03, 0xCA, 0x04};
 uint8_t MacAddressUltrasonic[] = {0xE8, 0xDB, 0x84, 0x00, 0xFB, 0x3C};
-uint8_t MacAddressScanner[] = {0xE8, 0xDB, 0x84, 0x01, 0x07, 0x90};
-uint8_t MacAddressLed[] = {0xE8, 0x68, 0xE7, 0x23, 0x82, 0x1C};
+uint8_t MacAddressLed[] = {0xE8, 0xDB, 0x84, 0x01, 0x07, 0x90};
+uint8_t MacAddressScanner[] = {0xE8, 0x68, 0xE7, 0x23, 0x82, 0x1C};
+
+bool compareMac(const uint8_t * a,const uint8_t * b){
+  for(int i=0;i<6;i++){
+    if(a[i]!=b[i])
+      return false;    
+  }
+  return true;
+}
 
 typedef struct servo_struct{
   int servo_status;//1 = lock, 0 = unlock
@@ -29,6 +38,11 @@ typedef struct recieve_status_scanner {
   int scanner_status;
 } recieve_status_scanner;
 
+typedef struct send_servo1{
+  int statuss;
+}send_servo1;
+
+send_servo1 form_scan;
 servo_struct send_servo;
 ultrasonic_send ultrasonic;
 
@@ -64,48 +78,65 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.println(macStr);
   //receive data
-  memcpy(&ultrasonic, incomingData, sizeof(ultrasonic));
-  Serial.println(ultrasonic.stateUltra);
-  //lock
-  if (ultrasonic.stateUltra == 1 && send_servo.servo_status == 0) {
-    for (i=0; i<=90; i++) {
-      servo1.write(i);
-      delay(10);
+  if(compareMac(mac_addr,MacAddressUltrasonic)){
+    memcpy(&ultrasonic, incomingData, sizeof(ultrasonic));
+    Serial.println(ultrasonic.stateUltra);
+    //lock
+    if (ultrasonic.stateUltra == 1 && send_servo.servo_status == 0) {
+      for (i=0; i<=90; i++) {
+        servo1.write(i);
+        delay(10);
+      }
+      Serial.println("lock the door");
+      send_servo.servo_status = 1;
+      esp_err_t result1 = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct));
+      if (result1 == ESP_OK) {
+        Serial.println("sending_data - keypad - success");
+      }
+      else {
+        Serial.println("Error sending the data");
+      } 
+      // delay(1000);
+      esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
+      if (result2 == ESP_OK) {
+        Serial.println("sending_data - led - success");
+      }
+      else {
+        Serial.println("Error sending the data");
+      } 
+      // delay(1000);
     }
-    Serial.println("lock the door");
-    send_servo.servo_status = 1;
-    esp_err_t result1 = esp_now_send(MacAddressKeyPad, (uint8_t *) &send_servo, sizeof(servo_struct));
-    if (result1 == ESP_OK) {
-      Serial.println("sending_data - keypad - success");
+    //unlock
+    else if (ultrasonic.stateUltra == 0 && send_servo.servo_status == 1) {
+      for (i=90; i>=0; i--) {
+        servo1.write(i);
+        delay(10);
+      }
+      Serial.print(" - unlock the door\n");
+      send_servo.servo_status = 0;
+  //    esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
+  //    if (result2 == ESP_OK) {
+  //      Serial.println("sending_data - led - success");
+  //    }
+  //    else {
+  //      Serial.println("Error sending the data");
+  //    } 
     }
-    else {
-      Serial.println("Error sending the data");
-    } 
-    // delay(1000);
-    esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
-    if (result2 == ESP_OK) {
-      Serial.println("sending_data - led - success");
-    }
-    else {
-      Serial.println("Error sending the data");
-    } 
-    // delay(1000);
   }
-  //unlock
-  else if (ultrasonic.stateUltra == 0 && send_servo.servo_status == 1) {
-    for (i=90; i>=0; i--) {
-      servo1.write(i);
-      delay(10);
-    }
-    Serial.print(" - unlock the door\n");
-    send_servo.servo_status = 0;
-    esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
-    if (result2 == ESP_OK) {
-      Serial.println("sending_data - led - success");
-    }
-    else {
-      Serial.println("Error sending the data");
-    } 
+  if(compareMac(mac_addr,MacAddressScanner)){
+      memcpy(&form_scan, incomingData, sizeof(form_scan));
+      Serial.printf("--------From Ta : สแกน---------\n");
+      printf("%d\n", form_scan.statuss);
+      if(form_scan.statuss == 0){
+        for (i=90; i>=0; i--) {
+          servo1.write(i);
+          delay(10);
+        }
+        Serial.print(" - unlock the door\n");
+        send_servo.servo_status = 0;
+      }
+      Serial.printf("---------------------------------\n");
+      Serial.println();
   }
 }
 
