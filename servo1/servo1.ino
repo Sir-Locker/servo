@@ -47,10 +47,15 @@ typedef struct servo_oled{
   int show_servo;
 }servo_oled;
 
+typedef struct send_open_keypad{
+  int statuss; // 1 close 0 open
+}send_open_keypad;
+
 send_servo1 form_scan;
 servo_struct send_servo;
 ultrasonic_send ultrasonic;
 servo_oled send_oled;
+send_open_keypad form_keypad;
 
 esp_now_peer_info_t peerInfoUltrasonic; //ultrasonic
 esp_now_peer_info_t peerInfoKeyPad;
@@ -102,7 +107,15 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
       else {
         Serial.println("Error sending keypad");
       } 
-      delay(1000);
+      delay(500);
+      esp_err_t result4 = esp_now_send(MacAddressScanner, (uint8_t *) &send_servo, sizeof(servo_struct));
+      if (result4 == ESP_OK) {
+        Serial.println("sending_data - scan - success");
+      }
+      else {
+        Serial.println("Error sending scan");
+      } 
+      delay(500);
       esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
       if (result2 == ESP_OK) {
         Serial.println("sending_data - led - success");
@@ -110,7 +123,7 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
       else {
         Serial.println("Error sending led");
       } 
-      delay(1000);
+      delay(500);
       send_oled.show_servo = 1;
       esp_err_t result3 = esp_now_send(MacAddressOled, (uint8_t *) &send_oled, sizeof(servo_oled));
       if (result3 == ESP_OK) {
@@ -141,7 +154,23 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
       memcpy(&form_scan, incomingData, sizeof(form_scan));
       Serial.printf("--------From Ta : สแกน---------\n");
       printf("%d\n", form_scan.statuss);
-      if(form_scan.statuss == 0){
+      if(form_scan.statuss == 0 && send_servo.servo_status == 1){
+        for (i=90; i>=0; i--) {
+          servo1.write(i);
+          delay(10);
+        }
+        Serial.print(" - unlock the door\n");
+        send_servo.servo_status = 0;
+        delay(10000);
+      }
+      Serial.printf("---------------------------------\n");
+      Serial.println();
+  }
+  if(compareMac(mac_addr,MacAddressKeyPad)){
+      memcpy(&form_keypad, incomingData, sizeof(form_keypad));
+      Serial.printf("--------From Belle : ปุ่มกด---------\n");
+      printf("%d\n", form_keypad.statuss);
+      if(form_keypad.statuss == 0 && send_servo.servo_status == 1){
         for (i=90; i>=0; i--) {
           servo1.write(i);
           delay(10);
