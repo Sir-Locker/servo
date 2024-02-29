@@ -17,6 +17,7 @@ uint8_t MacAddressKeyPad[] = {0x3C, 0x61, 0x05, 0x03, 0xCA, 0x04};
 uint8_t MacAddressUltrasonic[] = {0xE8, 0xDB, 0x84, 0x00, 0xFB, 0x3C};
 uint8_t MacAddressLed[] = {0xE8, 0xDB, 0x84, 0x01, 0x07, 0x90};
 uint8_t MacAddressScanner[] = {0xE8, 0x68, 0xE7, 0x23, 0x82, 0x1C};
+uint8_t MacAddressOled[] = {0x24, 0x6F, 0x28, 0x28, 0x15, 0x94};
 
 bool compareMac(const uint8_t * a,const uint8_t * b){
   for(int i=0;i<6;i++){
@@ -42,15 +43,20 @@ typedef struct send_servo1{
   int statuss;
 }send_servo1;
 
+typedef struct servo_oled{
+  int show_servo;
+}servo_oled;
+
 send_servo1 form_scan;
 servo_struct send_servo;
 ultrasonic_send ultrasonic;
+servo_oled send_oled;
 
 esp_now_peer_info_t peerInfoUltrasonic; //ultrasonic
 esp_now_peer_info_t peerInfoKeyPad;
 esp_now_peer_info_t peerInfoScanner;
 esp_now_peer_info_t peerInfoLed;
-
+esp_now_peer_info_t peerInfoOled;
 
 bool compareMac(const uint8_t * a, uint8_t * b){
   for(int i=0;i<6;i++){
@@ -94,17 +100,25 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
         Serial.println("sending_data - keypad - success");
       }
       else {
-        Serial.println("Error sending the data");
+        Serial.println("Error sending keypad");
       } 
-      // delay(1000);
+      delay(1000);
       esp_err_t result2 = esp_now_send(MacAddressLed, (uint8_t *) &send_servo, sizeof(servo_struct));
       if (result2 == ESP_OK) {
         Serial.println("sending_data - led - success");
       }
       else {
-        Serial.println("Error sending the data");
+        Serial.println("Error sending led");
       } 
-      // delay(1000);
+      delay(1000);
+      send_oled.show_servo = 1;
+      esp_err_t result3 = esp_now_send(MacAddressOled, (uint8_t *) &send_oled, sizeof(servo_oled));
+      if (result3 == ESP_OK) {
+        Serial.println("sending_data - oled - success");
+      }
+      else {
+        Serial.println("Error sending oled");
+      } 
     }
     //unlock
     else if (ultrasonic.stateUltra == 0 && send_servo.servo_status == 1) {
@@ -134,6 +148,7 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
         }
         Serial.print(" - unlock the door\n");
         send_servo.servo_status = 0;
+        delay(10000);
       }
       Serial.printf("---------------------------------\n");
       Serial.println();
@@ -141,7 +156,7 @@ void OnDataRecv(const uint8_t * mac_addr, const uint8_t *incomingData, int len) 
 }
 
 void setup(){
-  Serial.begin(115200);
+  Serial.begin(9600);
   
   Serial.println();
   Serial.print("ESP Board MAC Address:  ");
@@ -184,6 +199,14 @@ void setup(){
   peerInfoLed.encrypt = false;
   if (esp_now_add_peer(&peerInfoLed) != ESP_OK){
     Serial.println("led: Failed to add peer");
+    return;
+  }
+  //peer oled
+  memcpy(peerInfoOled.peer_addr, MacAddressOled, 6);
+  peerInfoLed.channel = 0;  
+  peerInfoLed.encrypt = false;
+  if (esp_now_add_peer(&peerInfoOled) != ESP_OK){
+    Serial.println("Oled: Failed to add peer");
     return;
   }
   
